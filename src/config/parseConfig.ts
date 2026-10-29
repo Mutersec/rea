@@ -1,4 +1,5 @@
 import { accessSync, constants, statSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   ConfigurationError,
@@ -103,6 +104,13 @@ export const parseConfig = (
   if (!parsed.ok) return parsed;
   const env = parsed.value;
   return ok({
+    ...(env.REA_EVIDENCE_STORE === "project"
+      ? {
+          evidenceStoreRoot:
+            env.REA_EVIDENCE_STORE_DIR ??
+            join(process.cwd(), ".rea", "evidence"),
+        }
+      : {}),
     ...(env.REA_MCP_TOOL_FAMILIES === undefined
       ? {}
       : { mcpToolFamilies: env.REA_MCP_TOOL_FAMILIES }),

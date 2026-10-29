@@ -43,6 +43,7 @@ import {
 import { InvestigationRecords } from "../investigation/InvestigationRecords.js";
 import { recordEvidenceSources } from "../investigation/recordEvidenceSources.js";
 import { BinarySessionRecords } from "./BinarySessionRecords.js";
+import type { ProjectEvidenceStore } from "../investigation/ProjectEvidenceStore.js";
 import { binarySessionStatus } from "./BinarySessionStatus.js";
 import type { BinarySessionDetail } from "../../contracts/sessionStatusContract.js";
 import {
@@ -200,8 +201,9 @@ export class BinarySession
     providerRouter: SessionProviderRouter,
     records: InvestigationRecords = new InvestigationRecords(),
     bundleResourceFactory?: BundleResourceClientFactory,
+    evidenceStore?: ProjectEvidenceStore,
   ) {
-    super(records);
+    super(records, evidenceStore);
     this.#providerRouter = providerRouter;
     this.#bundleResourceFactory = bundleResourceFactory;
   }
