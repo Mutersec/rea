@@ -78,4 +78,4 @@ website/_site/
 # Temporary translation output prepared before replacing the complete site.
 website/.i18n-*/
 
-/.rea/
+.rea/
