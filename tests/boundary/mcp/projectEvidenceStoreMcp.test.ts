@@ -70,6 +70,24 @@ it("reports a durable write failure instead of claiming persistence", async () =
   expect(flushed.ok).toBe(false);
 });
 
+it("surfaces a failed store flush through session close", async () => {
+  const root = await createTestTempDirectory("rea-project-store-close-");
+  const blocker = join(root, "not-a-directory");
+  await writeFile(blocker, "");
+  const store = new ProjectEvidenceStore(join(blocker, "evidence"));
+  const session = createTestBinarySession(
+    () => {
+      throw new Error("Project Evidence storage must not launch a provider");
+    },
+    { evidenceStore: store },
+  );
+  expect(session.recordEvidence(FUNCTION_COMPARISON_EXAMPLE.left).ok).toBe(
+    true,
+  );
+  const closed = await session.close();
+  expect(closed.ok).toBe(false);
+});
+
 it("reuses project Evidence across sessions without resending it", async () => {
   const root = await createTestTempDirectory("rea-project-store-session-");
   const storeRoot = join(root, ".rea", "evidence");

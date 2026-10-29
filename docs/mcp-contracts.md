@@ -66,7 +66,9 @@ content-addressed by `evidence_id`, writes through a temporary file and rename,
 and re-authenticates every record before a later session can use it. Tampered
 or malformed files are treated as missing. Writes are flushed when the session
 closes, and a failed flush is reported as a cleanup failure rather than a
-durable record. Unknowns are not persisted by this first store slice.
+durable record. Unknowns are not persisted by this first store slice, and an
+exported session bundle still contains only that session's records. The store
+is a lookup source for later sessions, not an implicit bundle import.
 
 Saved records from the pre-6.6 identity projection that omitted
 `relationship_coverage: null` from its digest remain incompatible, even when
