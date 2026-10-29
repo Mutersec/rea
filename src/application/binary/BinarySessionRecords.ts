@@ -162,7 +162,10 @@ export abstract class BinarySessionRecords {
   #adoptStoredEvidence(evidenceId: string): Evidence | undefined {
     const stored = this.#evidenceStore?.read(evidenceId);
     if (stored === undefined) return undefined;
-    return this.#records.recordEvidence(stored).ok ? stored : undefined;
+    const adopted = this.#records.recordEvidence(stored);
+    if (!adopted.ok) return undefined;
+    if (adopted.value === "added") this.#emitSnapshotChanged();
+    return stored;
   }
 
   exportEvidenceBundle(): EvidenceBundle {
