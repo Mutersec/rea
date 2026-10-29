@@ -70,8 +70,9 @@ remains an integrity error.
 
 Set `REA_EVIDENCE_STORE=project` in the server environment to persist
 authenticated Evidence under `.rea/evidence` in the server process's current
-working directory. Set `REA_EVIDENCE_STORE_DIR` to an absolute project root
-when the client launches the server elsewhere. The store is
+working directory. Set `REA_EVIDENCE_STORE_DIR` to an absolute store root,
+normally `<project>/.rea/evidence`, when the client launches the server
+elsewhere. The store is
 content-addressed by `evidence_id`, writes through a temporary file and rename,
 and re-authenticates every record before a later session can use it. Tampered
 or malformed files are treated as missing. Writes are flushed when the session
