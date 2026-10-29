@@ -872,7 +872,12 @@ export class BinarySession
   ): Promise<Result<null, AnalysisError>> {
     return this.#serialize(async (admittedThrough) => {
       await this.#drainCalls(admittedThrough);
-      return this.#closeActive(options);
+      const closed = await this.#closeActive(options);
+      const flushed = await this.flushEvidenceStore();
+      if (flushed.ok) return closed;
+      return closed.ok
+        ? flushed
+        : err(analysisErrorWithCleanupFailure(closed.error, flushed.error));
     });
   }
 
@@ -899,6 +904,16 @@ export class BinarySession
         evidence_records: snapshot.value.evidence_bundle.records.length,
       };
       const closed = await this.#closeActive(options);
+      const flushed = await this.flushEvidenceStore();
+      if (!flushed.ok)
+        return err(
+          retainSavedAnalysisSnapshot(
+            closed.ok
+              ? flushed.error
+              : analysisErrorWithCleanupFailure(closed.error, flushed.error),
+            receipt,
+          ),
+        );
       return closed.ok
         ? ok(receipt)
         : err(retainSavedAnalysisSnapshot(closed.error, receipt));

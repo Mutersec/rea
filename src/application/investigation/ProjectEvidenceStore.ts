@@ -83,7 +83,7 @@ export class ProjectEvidenceStore {
         {
           cause,
           userMessage:
-            "REA could not persist Evidence under .rea/evidence. Inspect the project directory permissions and available space before relying on cross-session reuse.",
+            "REA could not persist Evidence to the project store. Inspect the configured store directory permissions and available space before relying on cross-session reuse.",
         },
       ),
     );

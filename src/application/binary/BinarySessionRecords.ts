@@ -11,7 +11,6 @@ import {
   AnalysisSnapshotMismatchError,
 } from "../../domain/evidenceErrors.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
-import { analysisErrorWithCleanupFailure } from "../../domain/analysisErrorCleanup.js";
 import {
   AnalysisCapabilityUnavailableError,
   type AnalysisInputError,
@@ -195,13 +194,9 @@ export abstract class BinarySessionRecords {
 
   /** Retry retained target reads and snapshot files at the owning session shutdown. */
   async closeFileResources(): Promise<Result<null, AnalysisError>> {
-    const storeFlush =
-      this.#evidenceStore === undefined
-        ? undefined
-        : await this.#evidenceStore.flush();
     try {
       await this.fileResources.retryCleanup();
-      return storeFlush ?? ok(null);
+      return ok(null);
     } catch (cause: unknown) {
       const observation = ArtifactReaderFailure.cleanupObservation(
         cause,
@@ -214,12 +209,15 @@ export abstract class BinarySessionRecords {
         { cause, operation: "close_binary" },
       );
       bindRegularFileCleanup(cause, error);
-      return err(
-        storeFlush !== undefined && !storeFlush.ok
-          ? analysisErrorWithCleanupFailure(error, storeFlush.error)
-          : error,
-      );
+      return err(error);
     }
+  }
+
+  /** Flush durable Evidence writes at final session close, not target switches. */
+  async flushEvidenceStore(): Promise<Result<null, AnalysisError>> {
+    return this.#evidenceStore === undefined
+      ? ok(null)
+      : this.#evidenceStore.flush();
   }
 
   importEvidenceBundle(
