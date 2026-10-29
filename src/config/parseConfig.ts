@@ -1,5 +1,4 @@
 import { accessSync, constants, statSync } from "node:fs";
-import { join } from "node:path";
 
 import {
   ConfigurationError,
@@ -15,6 +14,7 @@ import { DEFAULT_REGEX_WORKER_HEAP_REQUEST } from "./regexWorkerHeapRequest.js";
 import type { AppConfig } from "./types.js";
 import { hopperLauncherDiscovery } from "../application/HopperLauncherDiscovery.js";
 import { localMacHopperRenamedLauncherCandidates } from "../application/MacHopperPaths.js";
+import { projectEvidenceStoreRoot } from "./evidenceStoreRoot.js";
 const executableAvailable = (path: string): boolean => {
   try {
     accessSync(path, constants.X_OK);
@@ -103,14 +103,9 @@ export const parseConfig = (
   const parsed = parseEnvironment(nativeAnalysisEnvironment(environment));
   if (!parsed.ok) return parsed;
   const env = parsed.value;
+  const evidenceStoreRoot = projectEvidenceStoreRoot(env);
   return ok({
-    ...(env.REA_EVIDENCE_STORE === "project"
-      ? {
-          evidenceStoreRoot:
-            env.REA_EVIDENCE_STORE_DIR ??
-            join(process.cwd(), ".rea", "evidence"),
-        }
-      : {}),
+    ...(evidenceStoreRoot === undefined ? {} : { evidenceStoreRoot }),
     ...(env.REA_MCP_TOOL_FAMILIES === undefined
       ? {}
       : { mcpToolFamilies: env.REA_MCP_TOOL_FAMILIES }),
