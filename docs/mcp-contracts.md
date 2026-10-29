@@ -69,8 +69,9 @@ remains an integrity error.
 ### Project Evidence store
 
 Set `REA_EVIDENCE_STORE=project` in the server environment to persist
-authenticated Evidence under the project's `.rea/evidence` directory.
-`REA_EVIDENCE_STORE_DIR` selects a different absolute root. The store is
+authenticated Evidence under `.rea/evidence` in the server process's current
+working directory. Set `REA_EVIDENCE_STORE_DIR` to an absolute project root
+when the client launches the server elsewhere. The store is
 content-addressed by `evidence_id`, writes through a temporary file and rename,
 and re-authenticates every record before a later session can use it. Tampered
 or malformed files are treated as missing. Writes are flushed when the session
