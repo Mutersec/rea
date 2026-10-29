@@ -12,6 +12,7 @@ import type { Logger } from "pino";
 import { auxiliaryAnalysisProviderDeclarations } from "./auxiliaryAnalysisProviders.js";
 import { AnalysisProviderRegistry } from "../application/binary/AnalysisProviderRegistry.js";
 import { composeBinarySession } from "../application/binary/BinarySessionComposition.js";
+import { ProjectEvidenceStore } from "../application/investigation/ProjectEvidenceStore.js";
 import { LazyAnalysisProvider } from "../application/binary/LazyAnalysisProvider.js";
 import { ManagedStaticProvider } from "../dotnet/ManagedStaticProvider.js";
 import {
@@ -60,6 +61,10 @@ const composeDeepBinarySession = (
   settings?: AnalysisSettingsReader,
 ): BinarySession => {
   const environment = snapshotEnvironment(selectedEnvironment);
+  const evidenceStore =
+    config.evidenceStoreRoot === undefined
+      ? undefined
+      : new ProjectEvidenceStore(config.evidenceStoreRoot);
   const hopper = new HopperProvider(config, logger, environment);
   const ghidra = new GhidraProvider(config, logger, environment);
   const ida = new IdaProvider(config, environment);
@@ -89,6 +94,7 @@ const composeDeepBinarySession = (
       (declaration) => new LazyAnalysisProvider(declaration),
     ),
     createBundleResourceFactory(environment, process.platform, settings),
+    evidenceStore,
   );
 };
 

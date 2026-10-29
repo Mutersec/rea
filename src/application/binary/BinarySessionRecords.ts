@@ -11,6 +11,7 @@ import {
   AnalysisSnapshotMismatchError,
 } from "../../domain/evidenceErrors.js";
 import type { AnalysisError } from "../../domain/analysisErrorBase.js";
+import { analysisErrorWithCleanupFailure } from "../../domain/analysisErrorCleanup.js";
 import {
   AnalysisCapabilityUnavailableError,
   type AnalysisInputError,
@@ -35,6 +36,7 @@ import type {
 } from "../AnalysisProvider.js";
 import { AnalysisSnapshotCache } from "./AnalysisSnapshotCache.js";
 import { InvestigationRecords } from "../investigation/InvestigationRecords.js";
+import type { ProjectEvidenceStore } from "../investigation/ProjectEvidenceStore.js";
 import { ArtifactResourceScope } from "../../artifacts/ArtifactResourceScope.js";
 import { ArtifactReaderFailure } from "../../artifacts/ArtifactReader.js";
 import { bindRegularFileCleanup } from "../RegularFileRead.js";
@@ -104,8 +106,14 @@ export abstract class BinarySessionRecords {
   #snapshotInvalidated = false;
   readonly #snapshotListeners = new Set<() => void | Promise<void>>();
 
-  constructor(records: InvestigationRecords = new InvestigationRecords()) {
+  readonly #evidenceStore: ProjectEvidenceStore | undefined;
+
+  constructor(
+    records: InvestigationRecords = new InvestigationRecords(),
+    evidenceStore?: ProjectEvidenceStore,
+  ) {
     this.#records = records;
+    this.#evidenceStore = evidenceStore;
   }
 
   /** Observe changes to the mutable current analysis snapshot resource. */
@@ -118,21 +126,43 @@ export abstract class BinarySessionRecords {
     evidence: Evidence,
   ): Result<"added" | "duplicate", EvidenceIntegrityError> {
     const recorded = this.#records.recordEvidence(evidence);
-    if (recorded.ok && recorded.value === "added") this.#emitSnapshotChanged();
+    if (recorded.ok) {
+      if (recorded.value === "added") this.#emitSnapshotChanged();
+      this.#evidenceStore?.persist(evidence);
+    }
     return recorded;
   }
 
   hasEvidence(evidenceId: string): boolean {
-    return this.#records.hasEvidence(evidenceId);
+    return (
+      this.#records.hasEvidence(evidenceId) ||
+      this.#evidenceStore?.has(evidenceId) === true
+    );
   }
 
   evidenceById(evidenceId: string): Evidence | undefined {
-    return this.#records.evidenceById(evidenceId);
+    return (
+      this.#records.evidenceById(evidenceId) ??
+      (this.#adoptStoredEvidence(evidenceId) === undefined
+        ? undefined
+        : this.#records.evidenceById(evidenceId))
+    );
   }
 
   /** Borrow immutable investigation Evidence without copying a complete graph. */
   evidenceForAnalysis(evidenceId: string): Evidence | undefined {
-    return this.#records.evidenceForAnalysis(evidenceId);
+    return (
+      this.#records.evidenceForAnalysis(evidenceId) ??
+      (this.#adoptStoredEvidence(evidenceId) === undefined
+        ? undefined
+        : this.#records.evidenceForAnalysis(evidenceId))
+    );
+  }
+
+  #adoptStoredEvidence(evidenceId: string): Evidence | undefined {
+    const stored = this.#evidenceStore?.read(evidenceId);
+    if (stored === undefined) return undefined;
+    return this.#records.recordEvidence(stored).ok ? stored : undefined;
   }
 
   exportEvidenceBundle(): EvidenceBundle {
@@ -162,9 +192,13 @@ export abstract class BinarySessionRecords {
 
   /** Retry retained target reads and snapshot files at the owning session shutdown. */
   async closeFileResources(): Promise<Result<null, AnalysisError>> {
+    const storeFlush =
+      this.#evidenceStore === undefined
+        ? undefined
+        : await this.#evidenceStore.flush();
     try {
       await this.fileResources.retryCleanup();
-      return ok(null);
+      return storeFlush ?? ok(null);
     } catch (cause: unknown) {
       const observation = ArtifactReaderFailure.cleanupObservation(
         cause,
@@ -177,7 +211,11 @@ export abstract class BinarySessionRecords {
         { cause, operation: "close_binary" },
       );
       bindRegularFileCleanup(cause, error);
-      return err(error);
+      return err(
+        storeFlush !== undefined && !storeFlush.ok
+          ? analysisErrorWithCleanupFailure(error, storeFlush.error)
+          : error,
+      );
     }
   }
 
@@ -190,7 +228,11 @@ export abstract class BinarySessionRecords {
     const imported = this.#records.mergeEvidenceBundle(bundle);
     if (!imported.ok) return imported;
     this.#snapshot.refreshEvidenceMetadata(imported.value.replacements);
-    if (imported.value.changed) this.#emitSnapshotChanged();
+    if (imported.value.changed) {
+      this.#emitSnapshotChanged();
+      for (const evidence of this.immutableEvidenceBundle().records)
+        this.#evidenceStore?.persist(evidence);
+    }
     return ok({
       recordsAdded: imported.value.recordsAdded,
       unknownsAdded: imported.value.unknownsAdded,
@@ -429,7 +471,10 @@ export abstract class BinarySessionRecords {
     input: RecordUnknownInput,
   ): Result<ResidualUnknown | null, AnalysisError> {
     const recorded = this.#records.recordEvidenceWithUnknown(evidence, input);
-    if (recorded.ok) this.#emitSnapshotChanged();
+    if (recorded.ok) {
+      this.#emitSnapshotChanged();
+      this.#evidenceStore?.persist(evidence);
+    }
     return recorded;
   }
 
