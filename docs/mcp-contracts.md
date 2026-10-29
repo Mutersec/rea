@@ -53,8 +53,13 @@ reject the summary record. Give `compare_functions` the retained dossier as
 `{"kind": "retained-evidence", "evidence_id": "<parent_evidence_id>"}`; give
 `match_native_functions` the same reference inside `left_observations` or
 `right_observations`, since its `left` and `right` take `list_procedures`
-Evidence. Request `detail: "complete"` for `build_call_path`, which accepts
-only inline complete dossiers.
+Evidence. `build_call_path` also requires complete dossiers, but accepts them
+as retained references or as `{"kind": "evidence-file", "path":
+"/absolute/sources.json", "evidence_id": "<parent_evidence_id>"}` selections
+from an authenticated Evidence file or bundle. `find_changed_behavior` and
+`compare_process_captures` accept the same inline, retained, and file forms for
+their input records. File-backed workflow inputs retain the selected record's
+available source closure; missing linked Evidence remains an integrity error.
 
 Saved records from the pre-6.6 identity projection that omitted
 `relationship_coverage: null` from its digest remain incompatible, even when
