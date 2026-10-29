@@ -56,10 +56,15 @@ reject the summary record. Give `compare_functions` the retained dossier as
 Evidence. `build_call_path` also requires complete dossiers, but accepts them
 as retained references or as `{"kind": "evidence-file", "path":
 "/absolute/sources.json", "evidence_id": "<parent_evidence_id>"}` selections
-from an authenticated Evidence file or bundle. `find_changed_behavior` and
-`compare_process_captures` accept the same inline, retained, and file forms for
-their input records. File-backed workflow inputs retain the selected record's
-available source closure; missing linked Evidence remains an integrity error.
+from an authenticated Evidence file or bundle. `find_changed_behavior`,
+`correlate_static_and_runtime`, and `compare_process_captures` accept the same
+inline, retained, and file forms for their input records.
+`compare_managed_members`, `verify_managed_native_boundaries`, and
+`project_managed_application_graph` accept the same reference forms for their
+managed sources, and the Android, Apple, and Harmony application graph
+projections accept them for `inventory_evidence`. File-backed workflow inputs
+retain the selected record's available source closure; missing linked Evidence
+remains an integrity error.
 
 Saved records from the pre-6.6 identity projection that omitted
 `relationship_coverage: null` from its digest remain incompatible, even when

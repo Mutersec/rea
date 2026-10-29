@@ -56,6 +56,7 @@ export const registerInvestigationTools = (
     session,
     admission,
     toolContract("correlate_static_and_runtime"),
+    resources,
   );
   registerReconstruction(
     server,
@@ -265,6 +266,7 @@ const registerStaticRuntime = (
   session: BinarySessionPort,
   admission: ReturnType<typeof withAdmittedAnalysis>,
   contract: ReturnType<typeof toolContract<"correlate_static_and_runtime">>,
+  resources: ArtifactResourceScope,
 ): void => {
   server.registerTool(
     contract.name,
@@ -276,29 +278,73 @@ const registerStaticRuntime = (
         contract.name,
         context.mcpReq.signal,
         async () => {
+          const parsed = contract.inputSchema.safeParse(input);
+          if (!parsed.success) {
+            const rejected = await runDerivedOperation(
+              context,
+              contract.name,
+              () => correlateStaticAndRuntime(input),
+            );
+            return server.delivery.toCallToolResult(rejected, contract);
+          }
+          const staticSources = await resolveEvidenceSourceList(
+            parsed.data.static_comparisons,
+            "static_comparisons",
+            session.evidenceForAnalysis.bind(session),
+            {
+              operation: contract.name,
+              signal: context.mcpReq.signal,
+              resources,
+            },
+          );
+          if (!staticSources.ok)
+            return server.delivery.toCallToolResult(staticSources, contract);
+          const runtimeSources = await resolveEvidenceSourceList(
+            parsed.data.runtime_comparisons,
+            "runtime_comparisons",
+            session.evidenceForAnalysis.bind(session),
+            {
+              operation: contract.name,
+              signal: context.mcpReq.signal,
+              resources,
+            },
+          );
+          if (!runtimeSources.ok)
+            return server.delivery.toCallToolResult(runtimeSources, contract);
+          const resolvedInput = {
+            ...parsed.data,
+            static_comparisons: [...staticSources.value.records],
+            runtime_comparisons: [...runtimeSources.value.records],
+          };
+          const computed = await runDerivedOperation(
+            context,
+            contract.name,
+            () => correlateStaticAndRuntime(resolvedInput),
+          );
+          if (!computed.ok)
+            return server.delivery.toCallToolResult(computed, contract);
+          const recordedSources = recordEvidenceSources(
+            (source) => session.recordEvidence(source),
+            [...staticSources.value.sources, ...runtimeSources.value.sources],
+          );
+          if (!recordedSources.ok)
+            return server.delivery.toCallToolResult(recordedSources, contract);
           const closure = resolveInvestigationEvidenceClosure(
             session,
             comparisonClosure([
-              ...input.static_comparisons,
-              ...input.runtime_comparisons,
+              ...resolvedInput.static_comparisons,
+              ...resolvedInput.runtime_comparisons,
             ]),
           );
           if (!closure.ok)
             return server.delivery.toCallToolResult(closure, contract);
           const links = closure.value;
-          const computed = await runDerivedOperation(
-            context,
-            contract.name,
-            () => correlateStaticAndRuntime(input),
-          );
-          if (!computed.ok)
-            return server.delivery.toCallToolResult(computed, contract);
           const result = computed.value;
           const evidence = createEvidence(undefined, STATIC_RUNTIME_PROVIDER, {
             predicateType: "rea.static-runtime-correlation",
             operation: contract.name,
             parameters: {
-              mapping_count: input.mappings.length,
+              mapping_count: resolvedInput.mappings.length,
             },
             result,
             confidence: "inferred",

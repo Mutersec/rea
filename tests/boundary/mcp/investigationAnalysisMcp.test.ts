@@ -234,6 +234,92 @@ it("loads selected Evidence files and their source closure without prior session
   }
 });
 
+it("resolves retained and file correlation inputs with their source closure", async () => {
+  const correlation = INVESTIGATION_EXAMPLES.correlate_static_and_runtime;
+  const records = [
+    FUNCTION_COMPARISON_EXAMPLE.left,
+    FUNCTION_COMPARISON_EXAMPLE.right,
+    FUNCTION_COMPARISON_EVIDENCE,
+    PROCESS_CAPTURE_REFERENCE,
+    PROCESS_CAPTURE_RECONSTRUCTION,
+    PROCESS_COMPARISON_EVIDENCE,
+  ];
+  const retainedRun = await connected();
+  try {
+    for (const record of records)
+      expect(retainedRun.session.recordEvidence(record).ok).toBe(true);
+    const response = await retainedRun.client.callTool({
+      name: "correlate_static_and_runtime",
+      arguments: {
+        ...correlation,
+        static_comparisons: [
+          {
+            kind: "retained-evidence",
+            evidence_id: FUNCTION_COMPARISON_EVIDENCE.evidence_id,
+          },
+        ],
+        runtime_comparisons: [
+          {
+            kind: "retained-evidence",
+            evidence_id: PROCESS_COMPARISON_EVIDENCE.evidence_id,
+          },
+        ],
+      },
+    });
+    expect(response.isError, JSON.stringify(response)).not.toBe(true);
+    expect(inlineEvidence(response.structuredContent)).toMatchObject({
+      normalized_result: { status: "correlated" },
+      evidence_links: expect.arrayContaining([
+        FUNCTION_COMPARISON_EVIDENCE.evidence_id,
+        PROCESS_COMPARISON_EVIDENCE.evidence_id,
+      ]),
+    });
+  } finally {
+    await close(retainedRun.session, retainedRun.server, retainedRun.client);
+  }
+
+  const fileRun = await connected();
+  const root = await createTestTempDirectory("rea-correlation-sources-");
+  const sourcePath = join(root, "sources.json");
+  await writeFile(sourcePath, JSON.stringify(createEvidenceBundle(records)));
+  try {
+    const response = await fileRun.client.callTool({
+      name: "correlate_static_and_runtime",
+      arguments: {
+        ...correlation,
+        static_comparisons: [
+          {
+            kind: "evidence-file",
+            path: sourcePath,
+            evidence_id: FUNCTION_COMPARISON_EVIDENCE.evidence_id,
+          },
+        ],
+        runtime_comparisons: [
+          {
+            kind: "evidence-file",
+            path: sourcePath,
+            evidence_id: PROCESS_COMPARISON_EVIDENCE.evidence_id,
+          },
+        ],
+      },
+    });
+    expect(response.isError, JSON.stringify(response)).not.toBe(true);
+    const evidence = inlineEvidence(response.structuredContent);
+    expect(evidence).toMatchObject({
+      normalized_result: { status: "correlated" },
+    });
+    expect(evidence.evidence_links).toEqual(
+      expect.arrayContaining(records.map(({ evidence_id }) => evidence_id)),
+    );
+    for (const record of records)
+      expect(fileRun.session.evidenceForAnalysis(record.evidence_id)).toEqual(
+        record,
+      );
+  } finally {
+    await close(fileRun.session, fileRun.server, fileRun.client);
+  }
+});
+
 it("keeps call-path publication ahead of close_binary record draining", async () => {
   const session = createTestBinarySession(() => ({
     health: () => Promise.resolve(),
