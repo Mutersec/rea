@@ -104,7 +104,7 @@ export class ProjectEvidenceStore {
       );
       await rename(temporary, path);
     } catch (cause) {
-      await rm(temporary, { force: true });
+      await rm(temporary, { force: true }).catch(() => undefined);
       throw cause;
     }
   }
