@@ -13,6 +13,7 @@ import { auxiliaryAnalysisProviderDeclarations } from "./auxiliaryAnalysisProvid
 import { AnalysisProviderRegistry } from "../application/binary/AnalysisProviderRegistry.js";
 import { composeBinarySession } from "../application/binary/BinarySessionComposition.js";
 import { ProjectEvidenceStore } from "../application/investigation/ProjectEvidenceStore.js";
+import { projectEvidenceStoreRoot } from "../config/evidenceStoreRoot.js";
 import { LazyAnalysisProvider } from "../application/binary/LazyAnalysisProvider.js";
 import { ManagedStaticProvider } from "../dotnet/ManagedStaticProvider.js";
 import {
@@ -138,51 +139,56 @@ const createBundleResourceFactory = (
   };
 };
 
+const evidenceStoreFor = (
+  environment: Readonly<Record<string, string | undefined>>,
+): ProjectEvidenceStore | undefined => {
+  const root = projectEvidenceStoreRoot(environment);
+  return root === undefined ? undefined : new ProjectEvidenceStore(root);
+};
+
 /** Compose an execution-free managed session without native provider selection. */
-export const createManagedBinarySession = (): BinarySession =>
-  composeBinarySession(new AnalysisProviderRegistry([]), [
-    new ManagedStaticProvider(),
-  ]);
+export const createManagedBinarySession = (
+  selectedEnvironment?: Readonly<NodeJS.ProcessEnv>,
+): BinarySession =>
+  composeBinarySession(
+    new AnalysisProviderRegistry([]),
+    [new ManagedStaticProvider()],
+    undefined,
+    selectedEnvironment === undefined
+      ? undefined
+      : evidenceStoreFor(selectedEnvironment),
+  );
 
 /** Compose the artifact operations without candidates for deep analysis engines. */
 export const createArtifactBinarySession = (
   selectedEnvironment: Readonly<NodeJS.ProcessEnv>,
   platform: NodeJS.Platform = process.platform,
-): Promise<BinarySession> =>
-  import("../artifacts/ArtifactProvider.js").then(({ ArtifactProvider }) =>
-    composeBinarySession(
-      new AnalysisProviderRegistry([]),
-      [
-        new ArtifactProvider(
-          snapshotEnvironment(selectedEnvironment, platform),
-          platform,
-        ),
-      ],
-      createBundleResourceFactory(
-        snapshotEnvironment(selectedEnvironment, platform),
-        platform,
+): Promise<BinarySession> => {
+  const environment = snapshotEnvironment(selectedEnvironment, platform);
+  return import("../artifacts/ArtifactProvider.js").then(
+    ({ ArtifactProvider }) =>
+      composeBinarySession(
+        new AnalysisProviderRegistry([]),
+        [new ArtifactProvider(environment, platform)],
+        createBundleResourceFactory(environment, platform),
+        evidenceStoreFor(environment),
       ),
-    ),
   );
+};
 
 /** Compose native inspection utilities without candidates for deep analysis. */
 export const createNativeBinarySession = (
   selectedEnvironment: Readonly<NodeJS.ProcessEnv>,
   platform: NodeJS.Platform = process.platform,
-): Promise<BinarySession> =>
-  import("../native/NativeMacOSProvider.js").then(({ NativeMacOSProvider }) =>
-    composeBinarySession(
-      new AnalysisProviderRegistry([]),
-      [
-        new NativeMacOSProvider(
-          snapshotEnvironment(selectedEnvironment, platform),
-          undefined,
-          platform,
-        ),
-      ],
-      createBundleResourceFactory(
-        snapshotEnvironment(selectedEnvironment, platform),
-        platform,
+): Promise<BinarySession> => {
+  const environment = snapshotEnvironment(selectedEnvironment, platform);
+  return import("../native/NativeMacOSProvider.js").then(
+    ({ NativeMacOSProvider }) =>
+      composeBinarySession(
+        new AnalysisProviderRegistry([]),
+        [new NativeMacOSProvider(environment, undefined, platform)],
+        createBundleResourceFactory(environment, platform),
+        evidenceStoreFor(environment),
       ),
-    ),
   );
+};
