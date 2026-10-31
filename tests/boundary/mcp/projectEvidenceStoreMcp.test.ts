@@ -88,6 +88,30 @@ it("surfaces a failed store flush through session close", async () => {
   expect(closed.ok).toBe(false);
 });
 
+it("persists the ledger's record when the caller edits its own object", async () => {
+  const root = await createTestTempDirectory("rea-project-store-mutation-");
+  const storeRoot = join(root, ".rea", "evidence");
+  const store = new ProjectEvidenceStore(storeRoot);
+  const session = createTestBinarySession(
+    () => {
+      throw new Error("Project Evidence storage must not launch a provider");
+    },
+    { evidenceStore: store },
+  );
+  const callerRecord = structuredClone(FUNCTION_COMPARISON_EXAMPLE.left);
+  expect(session.recordEvidence(callerRecord).ok).toBe(true);
+  // The recorded copy is the ledger's; the caller still holds a mutable object.
+  const editable = callerRecord as { parameters: Record<string, unknown> };
+  editable.parameters = { ...callerRecord.parameters, edited: true };
+  const closed = await session.close();
+  expect(closed.ok, JSON.stringify(closed)).toBe(true);
+
+  const reopened = new ProjectEvidenceStore(storeRoot);
+  expect(reopened.read(callerRecord.evidence_id)).toEqual(
+    FUNCTION_COMPARISON_EXAMPLE.left,
+  );
+});
+
 it("reuses project Evidence across sessions without resending it", async () => {
   const root = await createTestTempDirectory("rea-project-store-session-");
   const storeRoot = join(root, ".rea", "evidence");

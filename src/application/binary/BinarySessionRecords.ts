@@ -127,7 +127,9 @@ export abstract class BinarySessionRecords {
     const recorded = this.#records.recordEvidence(evidence);
     if (recorded.ok && recorded.value === "added") {
       this.#emitSnapshotChanged();
-      this.#persistCommitted([evidence]);
+      // Queue the ledger's own immutable record; the caller's object stays mutable.
+      const owned = this.#records.evidenceForAnalysis(evidence.evidence_id);
+      if (owned !== undefined) this.#persistCommitted([owned]);
     }
     return recorded;
   }
@@ -483,7 +485,8 @@ export abstract class BinarySessionRecords {
     const recorded = this.#records.recordEvidenceWithUnknown(evidence, input);
     if (recorded.ok) {
       this.#emitSnapshotChanged();
-      this.#persistCommitted([evidence]);
+      const owned = this.#records.evidenceForAnalysis(evidence.evidence_id);
+      if (owned !== undefined) this.#persistCommitted([owned]);
     }
     return recorded;
   }
